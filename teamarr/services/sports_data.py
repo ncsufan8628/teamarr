@@ -67,6 +67,7 @@ _EVENT_NOT_FOUND = {"__event_not_found__": True}
 # a team that comes back into season is picked up within a few hours.
 _NOT_FOUND = {"__not_found__": True}
 
+
 # Sentinel distinguishing "no usable cache entry" from a legitimately cached
 # empty result (e.g. a league with no games that day, cached as []). A distinct
 # class (not bare object()) lets callers narrow the load_from_cache() union with
@@ -95,7 +96,6 @@ def _cached_team_identity(provider: str, team_id: str, league: str) -> dict | No
     hit = _TEAM_IDENTITY_MEMO.get(key)
     if hit is not None and now - hit[0] < _TEAM_IDENTITY_MEMO_TTL:
         return hit[1]
-
 
     with get_db() as conn:
         cached = get_team_identity(conn, provider, team_id, league)
@@ -544,6 +544,7 @@ class SportsDataService:
         # Structured preview (tvnk.15) — same summary payload, zero extra cost.
         "home_last_five",
         "away_last_five",
+        "rich_preview_data",
     )
 
     def refresh_event_status(self, event: Event) -> Event:
@@ -581,9 +582,7 @@ class SportsDataService:
 
         fresh_event = self.get_event(event.id, event.league)
         if not fresh_event:
-            logger.debug(
-                "[SPORTS_DATA] Could not refresh event %s, using cached status", event.id
-            )
+            logger.debug("[SPORTS_DATA] Could not refresh event %s, using cached status", event.id)
             return event
 
         logger.debug(
@@ -618,10 +617,17 @@ class SportsDataService:
     # summary call.
     PREVIEW_LOOKAHEAD_DAYS = 7
     PREVIEW_CACHE_TTL = 6 * 3600  # parsed preview fields; clamped to gametime
+    PREVIEW_SPARSE_CACHE_TTL = 30 * 60  # retry after ESPN publishes richer facts
     PREVIEW_FETCH_BUDGET = 40  # summary fetches per budget window
     PREVIEW_BUDGET_WINDOW = 3600
 
-    _PREVIEW_FIELDS = ("game_preview", "series_summary", "home_last_five", "away_last_five")
+    _PREVIEW_FIELDS = (
+        "game_preview",
+        "series_summary",
+        "home_last_five",
+        "away_last_five",
+        "rich_preview_data",
+    )
 
     def enrich_event_preview(self, event: Event) -> Event:
         """Overlay days-ahead preview fields onto a future event, cheaply.
@@ -635,8 +641,8 @@ class SportsDataService:
         """
         if not event or not event.start_time:
             return event
-        if event.home_last_five or event.away_last_five:
-            return event  # already enriched (e.g. via refresh overlay)
+        if event.rich_preview_data.get("complete"):
+            return event  # already fully enriched (e.g. via refresh overlay)
         now = datetime.now(UTC)
         start = event.start_time
         if start.tzinfo is None:
@@ -666,10 +672,14 @@ class SportsDataService:
         self._cache.set(budget_key, spent + 1, self.PREVIEW_BUDGET_WINDOW)
 
         fresh = self.get_event(event.id, event.league)
-        fields = {
-            f: (getattr(fresh, f, "") or "") if fresh else "" for f in self._PREVIEW_FIELDS
-        }
-        ttl = max(300, min(self.PREVIEW_CACHE_TTL, int(seconds_to_start)))
+        fields = {f: (getattr(fresh, f, "") or "") if fresh else "" for f in self._PREVIEW_FIELDS}
+        rich_data = fields.get("rich_preview_data") or {}
+        if not isinstance(rich_data, dict):
+            rich_data = {}
+        cache_ttl = (
+            self.PREVIEW_CACHE_TTL if rich_data.get("complete") else self.PREVIEW_SPARSE_CACHE_TTL
+        )
+        ttl = max(300, min(cache_ttl, int(seconds_to_start)))
         # Negative results cache too — a league without lastFiveGames data
         # shouldn't re-spend budget every run.
         self._cache.set(preview_key, fields, ttl)

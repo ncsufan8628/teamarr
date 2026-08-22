@@ -661,6 +661,11 @@ class ESPNProvider(UFCParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             )
             event.home_last_five = home_form
             event.away_last_five = away_form
+            # Provider-neutral structured facts; presentation is intentionally
+            # deferred to the template layer.
+            from teamarr.providers.espn.preview import parse_rich_preview
+
+            event.rich_preview_data = parse_rich_preview(data, event)
         return event
 
     @staticmethod

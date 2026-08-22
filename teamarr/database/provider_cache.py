@@ -51,6 +51,7 @@ def event_to_dict(event: Event) -> dict:
         "series_summary": event.series_summary,
         "home_last_five": event.home_last_five,
         "away_last_five": event.away_last_five,
+        "rich_preview_data": event.rich_preview_data,
         # Betting odds — the has_odds condition and odds vars read this; a
         # cache hit must not silently drop it (#366).
         "odds_data": event.odds_data,
@@ -196,6 +197,7 @@ def dict_to_event(data: dict) -> Event:
         series_summary=data.get("series_summary", ""),
         home_last_five=data.get("home_last_five", ""),
         away_last_five=data.get("away_last_five", ""),
+        rich_preview_data=data.get("rich_preview_data") or {},
         # Betting odds (#366) — absent in pre-upgrade cache entries
         odds_data=data.get("odds_data"),
         # UFC-specific fields

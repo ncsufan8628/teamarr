@@ -152,6 +152,10 @@ class Event:
     # preview prose which only populates ~T-0/T-1.
     home_last_five: str = ""
     away_last_five: str = ""
+    # Provider-neutral facts used by the deterministic rich-preview renderer.
+    # This deliberately contains no betting/odds data.  A dict keeps cached
+    # events forward-compatible as providers add optional facts.
+    rich_preview_data: dict = field(default_factory=dict)
 
     # MMA-specific: when main card begins (prelims start at start_time)
     main_card_start: datetime | None = None
