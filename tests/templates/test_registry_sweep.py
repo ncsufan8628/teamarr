@@ -192,6 +192,14 @@ def _nba_event(**kw):
         series_summary="Series tied 1-1",
         home_last_five="4-1",
         away_last_five="2-3",
+        rich_preview_data={
+            "version": 1,
+            "sport": "basketball",
+            "teams": {
+                "home": {"record": "10-2", "recent": []},
+                "away": {"record": "8-4", "recent": []},
+            },
+        },
     )
     defaults.update(kw)
     return _event(_NBA_HOME, _NBA_AWAY, "nba", "basketball", **defaults)
@@ -777,6 +785,7 @@ CONDITION_CASES: dict[str, tuple[str | None, str, str]] = {
     "is_not_final": (None, "us_pro_rich", "us_pro_final"),
     "has_recap": (None, "us_pro_rich", "sparse"),
     "has_preview": (None, "us_pro_rich", "sparse"),
+    "has_rich_preview": (None, "us_pro_rich", "sparse"),
     "has_structured_preview": (None, "us_pro_rich", "sparse"),
     "has_event_note": (None, "us_pro_rich", "sparse"),
     "has_match_note": (None, "soccer", "us_pro_rich"),

@@ -480,7 +480,22 @@ def _team_base(**overrides) -> dict:
                 "label": "In progress",
             },
         ],
-        "pregame_conditional_rows": [],
+        "pregame_conditional_rows": [
+            {
+                "condition": "has_rich_preview",
+                "condition_value": None,
+                "template": "{game_preview_rich.next}",
+                "priority": 5,
+                "label": "Rich preview (structured)",
+            },
+            {
+                "condition": "has_preview",
+                "condition_value": None,
+                "template": "{game_preview.next}",
+                "priority": 10,
+                "label": "Preview (provider)",
+            },
+        ],
         "idle_offseason": {
             "title_enabled": False,
             "title": None,
@@ -490,6 +505,13 @@ def _team_base(**overrides) -> dict:
             "description": "No upcoming {team_name} games scheduled.",
         },
         "conditional_descriptions": [
+            {
+                "condition": "has_rich_preview",
+                "condition_value": None,
+                "template": "{game_preview_rich}",
+                "priority": 5,
+                "label": "Rich preview (structured)",
+            },
             {
                 "condition": "has_preview",
                 "condition_value": None,
@@ -626,7 +648,22 @@ def _event_base(**overrides) -> dict:
         },
         "idle_conditional": dict(_LEGACY_CONDITIONAL_OFF),
         "idle_conditional_rows": [],
-        "pregame_conditional_rows": [],
+        "pregame_conditional_rows": [
+            {
+                "condition": "has_rich_preview",
+                "condition_value": None,
+                "template": "{game_preview_rich}",
+                "priority": 5,
+                "label": "Rich preview (structured)",
+            },
+            {
+                "condition": "has_preview",
+                "condition_value": None,
+                "template": "{game_preview}",
+                "priority": 10,
+                "label": "Preview (provider)",
+            },
+        ],
         "idle_offseason": {
             "title_enabled": False,
             "title": None,
@@ -636,6 +673,13 @@ def _event_base(**overrides) -> dict:
             "description": "",
         },
         "conditional_descriptions": [
+            {
+                "condition": "has_rich_preview",
+                "condition_value": None,
+                "template": "{game_preview_rich}",
+                "priority": 5,
+                "label": "Rich preview (structured)",
+            },
             {
                 "condition": "has_preview",
                 "condition_value": None,
@@ -701,7 +745,15 @@ def _event_base(**overrides) -> dict:
     return base
 
 
-# Shared conditional-description rows (ESPN-copy-first, tvnk.14).
+# Shared conditional-description rows (structured rich preview, then provider copy).
+_RICH_PREVIEW_ROW = {
+    "condition": "has_rich_preview",
+    "condition_value": None,
+    "template": "{game_preview_rich}",
+    "priority": 5,
+    "label": "Rich preview (structured)",
+}
+
 _PREVIEW_ROW = {
     "condition": "has_preview",
     "condition_value": None,
@@ -782,6 +834,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             "art_url": _ART_NEXT,
         },
         conditional_descriptions=[
+            dict(_RICH_PREVIEW_ROW),
             dict(_PREVIEW_ROW),
             dict(_MATCH_NOTE_ROW),
             {
@@ -812,6 +865,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
     _team_base(
         name="College Team (Starter)",
         conditional_descriptions=[
+            dict(_RICH_PREVIEW_ROW),
             dict(_PREVIEW_ROW),
             # Marquee note: bowls, CFP rounds, tournament designations
             # ('CFP Quarterfinal at the Cotton Bowl Classic. …', #355 item 2).
@@ -884,6 +938,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
     _event_base(
         name="College Event (Starter)",
         conditional_descriptions=[
+            dict(_RICH_PREVIEW_ROW),
             dict(_PREVIEW_ROW),
             # Marquee note: bowls, CFP rounds, tournament designations
             # ('CFP Quarterfinal at the Cotton Bowl Classic. …', #355 item 2).
@@ -958,6 +1013,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             "art_url": _EVENT_ART,
         },
         conditional_descriptions=[
+            dict(_RICH_PREVIEW_ROW),
             dict(_PREVIEW_ROW),
             dict(_MATCH_NOTE_ROW),
             {
@@ -1023,6 +1079,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             },
         ],
         conditional_descriptions=[
+            dict(_RICH_PREVIEW_ROW),
             {
                 "condition": "has_preview",
                 "condition_value": None,
@@ -1059,6 +1116,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             "art_url": _EVENT_ART,
         },
         conditional_descriptions=[
+            dict(_RICH_PREVIEW_ROW),
             dict(_PREVIEW_ROW),
             dict(_MATCH_NOTE_ROW),
             {
@@ -1131,6 +1189,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             },
         ],
         conditional_descriptions=[
+            dict(_RICH_PREVIEW_ROW),
             {
                 "condition": "has_preview",
                 "condition_value": None,
@@ -1203,6 +1262,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             },
         ],
         conditional_descriptions=[
+            dict(_RICH_PREVIEW_ROW),
             dict(_PREVIEW_ROW),
             {
                 "condition": None,

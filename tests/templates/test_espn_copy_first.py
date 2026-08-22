@@ -239,12 +239,14 @@ def test_event_config_conversion_passes_pregame_fallback():
 # --- starter set wiring ---
 
 
-def test_starter_set_is_espn_copy_first():
+def test_starter_set_prefers_rich_then_espn_copy():
     for spec in DEFAULT_TEMPLATE_SET:
-        # Main chain: a has_preview row above the constructed default.
+        # Main chain: rich structured prose, provider copy, then fallback.
         conds = spec["conditional_descriptions"]
-        assert conds[0]["condition"] == "has_preview", spec["name"]
-        assert conds[0]["template"].startswith("{game_preview"), spec["name"]
+        assert conds[0]["condition"] == "has_rich_preview", spec["name"]
+        assert conds[0]["template"] == "{game_preview_rich}", spec["name"]
+        preview = next(c for c in conds if c.get("condition") == "has_preview")
+        assert preview["template"].startswith("{game_preview"), spec["name"]
         assert conds[-1]["priority"] == 100, spec["name"]
         assert conds[0]["priority"] < 100, spec["name"]
 
