@@ -77,7 +77,7 @@ def _base_sentence(event: Event, data: dict) -> str:
         count = _number_word(int(series["games"]))
         return f"The {away} visit the {home}{location} to open a {count}-game series."
     summary = series.get("summary")
-    suffix = f", with {summary.rstrip('.').lower()}" if summary else ""
+    suffix = f", with {summary.rstrip('.')}" if summary else ""
     return f"The {away} visit the {home}{location}{suffix}."
 
 

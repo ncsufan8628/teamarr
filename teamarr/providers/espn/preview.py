@@ -6,6 +6,7 @@ Presentation belongs to the template layer, not the provider boundary.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -26,6 +27,33 @@ def _team_side(event: Event, team_id: str) -> str | None:
     if team_id == str(event.away_team.id):
         return "away"
     return None
+
+
+def _expand_team_abbreviations(summary: str, competition: dict, event: Event) -> str:
+    """Replace ESPN team codes in matchup prose with full display names."""
+    replacements: dict[str, str] = {}
+    for competitor in competition.get("competitors") or []:
+        team = competitor.get("team") or {}
+        abbreviation = str(team.get("abbreviation") or "").strip()
+        display_name = str(team.get("displayName") or "").strip()
+        if abbreviation and display_name:
+            replacements[abbreviation.casefold()] = display_name
+    for team in (event.home_team, event.away_team):
+        if team.abbreviation and team.name:
+            replacements.setdefault(team.abbreviation.casefold(), team.name)
+
+    if not replacements:
+        return summary
+    aliases = "|".join(
+        re.escape(abbreviation)
+        for abbreviation in sorted(replacements, key=len, reverse=True)
+    )
+    return re.sub(
+        rf"(?<![\w])(?:{aliases})(?![\w])",
+        lambda match: replacements[match.group(0).casefold()],
+        summary,
+        flags=re.IGNORECASE,
+    )
 
 
 def _current_recent_games(events: list[dict], event: Event) -> list[dict]:
@@ -138,8 +166,9 @@ def parse_rich_preview(data: dict[str, Any], event: Event) -> dict[str, Any]:
     series = series or next((s for s in series_options if s.get("type") == "season"), None)
     series_data = {}
     if series:
+        summary = _expand_team_abbreviations(series.get("summary") or "", competition, event)
         series_data = {
-            "summary": series.get("summary") or "",
+            "summary": summary,
             "score": series.get("seriesScore") or "",
             "games": series.get("totalCompetitions"),
             "completed": bool(series.get("completed")),

@@ -198,12 +198,20 @@ def test_parser_excludes_betting_and_ignores_preseason_series():
                     "competitors": [
                         {
                             "homeAway": "home",
-                            "team": {"id": "12", "displayName": "Seattle Mariners"},
+                            "team": {
+                                "id": "12",
+                                "displayName": "Seattle Mariners",
+                                "abbreviation": "SEA",
+                            },
                             "record": [{"type": "total", "summary": "60-68"}],
                         },
                         {
                             "homeAway": "away",
-                            "team": {"id": "16", "displayName": "Chicago Cubs"},
+                            "team": {
+                                "id": "16",
+                                "displayName": "Chicago Cubs",
+                                "abbreviation": "CHC",
+                            },
                             "record": [{"type": "total", "summary": "74-54"}],
                         },
                     ]
@@ -228,3 +236,46 @@ def test_parser_excludes_betting_and_ignores_preseason_series():
     assert parsed["series"]["games"] == 3
     assert "preseason" not in str(parsed["series"]).lower()
     assert "pickcenter" not in parsed and "odds" not in parsed and "predictor" not in parsed
+
+
+def test_series_summary_expands_team_abbreviation_to_full_name():
+    event = _event(
+        home_team=_team("Los Angeles Dodgers", "19"),
+        away_team=_team("Pittsburgh Pirates", "23"),
+    )
+    payload = {
+        "header": {
+            "competitions": [
+                {
+                    "competitors": [
+                        {
+                            "homeAway": "home",
+                            "team": {
+                                "id": "19",
+                                "displayName": "Los Angeles Dodgers",
+                                "abbreviation": "LAD",
+                            },
+                        },
+                        {
+                            "homeAway": "away",
+                            "team": {
+                                "id": "23",
+                                "displayName": "Pittsburgh Pirates",
+                                "abbreviation": "PIT",
+                            },
+                        },
+                    ]
+                }
+            ]
+        },
+        "seasonseries": [
+            {"type": "season", "summary": "LAD lead series 2-1", "seriesScore": "2-1"}
+        ],
+    }
+
+    parsed = parse_rich_preview(payload, event)
+    event.rich_preview_data = parsed
+    text = build_rich_preview(event)
+
+    assert "Los Angeles Dodgers lead series 2-1" in text
+    assert "LAD" not in text
