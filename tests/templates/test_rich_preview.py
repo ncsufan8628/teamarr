@@ -140,15 +140,15 @@ def test_football_partial_preview_and_no_betting_data():
     assert "6.5" not in text and "40.5" not in text
 
 
-def test_live_and_final_events_do_not_render_pregame_copy():
+def test_live_and_final_events_keep_frozen_preview_copy():
     data = {"teams": {"away": {"record": "1-0"}, "home": {"record": "0-1"}}}
-    assert (
-        build_rich_preview(_event(status=EventStatus(state="in_progress"), rich_preview_data=data))
-        == ""
+    scheduled = build_rich_preview(_event(rich_preview_data=data))
+    live = build_rich_preview(
+        _event(status=EventStatus(state="in_progress"), rich_preview_data=data)
     )
-    assert (
-        build_rich_preview(_event(status=EventStatus(state="final"), rich_preview_data=data)) == ""
-    )
+    final = build_rich_preview(_event(status=EventStatus(state="final"), rich_preview_data=data))
+    assert live == scheduled
+    assert final == scheduled
 
 
 def test_generic_team_sport_uses_records_form_and_available_leader():

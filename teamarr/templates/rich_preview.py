@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from teamarr.core import Event, Team
-from teamarr.utilities.event_status import is_event_final
 
 
 def _number_word(value: int) -> str:
@@ -132,12 +131,11 @@ def _generic_team_sentence(name: str, team: dict) -> str:
 def build_rich_preview(event: Event | None) -> str:
     """Return complete source-grounded prose, or empty when insufficient.
 
-    Rich previews are pregame-only. This prevents in-game box-score leaders
-    from leaking into guide text that was intended as a preview.
+    Structured facts are captured before kickoff and remain a stable snapshot
+    through the event. The service layer prevents live box-score data from
+    replacing that snapshot.
     """
-    if not event or is_event_final(event):
-        return ""
-    if event.status and event.status.state in {"in_progress", "in", "live"}:
+    if not event:
         return ""
     data = event.rich_preview_data or {}
     teams = data.get("teams") or {}

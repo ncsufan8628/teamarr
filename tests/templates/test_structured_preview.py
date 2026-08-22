@@ -109,6 +109,50 @@ def test_enrich_gates_past_and_far_events():
     assert past.home_last_five == "" and far.home_last_five == ""
 
 
+def test_cached_preview_snapshot_survives_kickoff():
+    svc = _service()
+    cached_fields = {
+        "game_preview": "Pregame copy",
+        "series_summary": "",
+        "home_last_five": "4-1",
+        "away_last_five": "2-3",
+        "rich_preview_data": {"version": 1, "complete": True},
+    }
+    svc._cache.set("event_preview:mlb:401", cached_fields, 3600)
+    with patch.object(SportsDataService, "get_event") as fetch:
+        event = svc.enrich_event_preview(_event(start_in_hours=-2))
+    assert fetch.call_count == 0
+    assert event.game_preview == "Pregame copy"
+    assert event.rich_preview_data["complete"] is True
+
+
+def test_status_refresh_cannot_replace_frozen_preview_with_live_stats():
+    svc = _service()
+    frozen = {"version": 1, "complete": True, "teams": {"home": {"record": "10-2"}}}
+    live = {"version": 1, "complete": True, "teams": {"home": {"stats": {"points": "7"}}}}
+    original = _event(rich_preview_data=frozen)
+    fresh = _event(status=EventStatus(state="in_progress"), rich_preview_data=live)
+    with patch.object(SportsDataService, "get_event", return_value=fresh):
+        refreshed = svc.refresh_event_status(original)
+    assert refreshed.status.state == "in_progress"
+    assert refreshed.rich_preview_data == frozen
+
+
+def test_status_refresh_does_not_create_preview_from_live_summary():
+    svc = _service()
+    live = {
+        "version": 1,
+        "complete": True,
+        "teams": {"home": {"stats": {"points": "7"}}},
+    }
+    original = _event()
+    fresh = _event(status=EventStatus(state="in_progress"), rich_preview_data=live)
+    with patch.object(SportsDataService, "get_event", return_value=fresh):
+        refreshed = svc.refresh_event_status(original)
+    assert refreshed.status.state == "in_progress"
+    assert refreshed.rich_preview_data == {}
+
+
 def test_partial_last_five_does_not_block_richer_refresh():
     svc = _service()
     fresh = _event(home_last_five="4-1", rich_preview_data={"version": 1})

@@ -605,6 +605,15 @@ class SportsDataService:
                 # when present, even if state is unchanged (other status fields
                 # like clock/period may have updated).
                 overlay[field_name] = fresh_val if fresh_val is not None else orig_val
+            elif field_name == "rich_preview_data":
+                # A rich preview is a pregame snapshot, not a live box score.
+                # Never attach summary facts first observed after kickoff, and
+                # never replace a snapshot already carried by this event.
+                fresh_state = fresh_event.status.state if fresh_event.status else ""
+                if fresh_state in {"in_progress", "in", "live", "final", "post"}:
+                    overlay[field_name] = orig_val
+                else:
+                    overlay[field_name] = orig_val or fresh_val
             else:
                 overlay[field_name] = fresh_val if fresh_val else orig_val
         return replace(event, **overlay)
@@ -618,6 +627,7 @@ class SportsDataService:
     PREVIEW_LOOKAHEAD_DAYS = 7
     PREVIEW_CACHE_TTL = 6 * 3600  # parsed preview fields; clamped to gametime
     PREVIEW_SPARSE_CACHE_TTL = 30 * 60  # retry after ESPN publishes richer facts
+    PREVIEW_SNAPSHOT_AFTER_START_TTL = 12 * 3600
     PREVIEW_FETCH_BUDGET = 40  # summary fetches per budget window
     PREVIEW_BUDGET_WINDOW = 3600
 
@@ -641,16 +651,6 @@ class SportsDataService:
         """
         if not event or not event.start_time:
             return event
-        if event.rich_preview_data.get("complete"):
-            return event  # already fully enriched (e.g. via refresh overlay)
-        now = datetime.now(UTC)
-        start = event.start_time
-        if start.tzinfo is None:
-            start = start.replace(tzinfo=UTC)
-        seconds_to_start = (start - now).total_seconds()
-        if seconds_to_start <= 0 or seconds_to_start > self.PREVIEW_LOOKAHEAD_DAYS * 86400:
-            return event
-
         preview_key = make_cache_key("event_preview", event.league, event.id)
         cached = self._cache.get(preview_key)
         if isinstance(cached, dict):
@@ -658,6 +658,16 @@ class SportsDataService:
                 event,
                 **{f: cached.get(f) or getattr(event, f) for f in self._PREVIEW_FIELDS},
             )
+        if event.rich_preview_data.get("complete"):
+            return event  # already fully enriched (e.g. via refresh overlay)
+
+        now = datetime.now(UTC)
+        start = event.start_time
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=UTC)
+        seconds_to_start = (start - now).total_seconds()
+        if seconds_to_start <= 0 or seconds_to_start > self.PREVIEW_LOOKAHEAD_DAYS * 86400:
+            return event
 
         budget_key = make_cache_key("event_preview_budget", "window")
         spent = self._cache.get(budget_key) or 0
@@ -679,7 +689,13 @@ class SportsDataService:
         cache_ttl = (
             self.PREVIEW_CACHE_TTL if rich_data.get("complete") else self.PREVIEW_SPARSE_CACHE_TTL
         )
-        ttl = max(300, min(cache_ttl, int(seconds_to_start)))
+        # Complete snapshots deliberately survive kickoff. A later live
+        # summary contains in-game leaders/team stats and must not rewrite the
+        # guide description. Event-id scoping naturally drops the snapshot
+        # when the channel advances to its next game.
+        ttl = cache_ttl
+        if rich_data.get("complete"):
+            ttl += self.PREVIEW_SNAPSHOT_AFTER_START_TTL
         # Negative results cache too — a league without lastFiveGames data
         # shouldn't re-spend budget every run.
         self._cache.set(preview_key, fields, ttl)
