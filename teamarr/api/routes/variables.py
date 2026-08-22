@@ -341,6 +341,12 @@ def get_conditions(template_type: str = "team"):
     # description chains.
     summary_conditions = [
         {
+            "name": "has_rich_preview",
+            "description": "Source-grounded rich pregame description is available",
+            "requires_value": False,
+            "providers": "all",
+        },
+        {
             "name": "has_preview",
             "description": "Provider preview blurb is available (same-day pregame)",
             "requires_value": False,

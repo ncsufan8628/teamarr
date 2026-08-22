@@ -11,6 +11,7 @@ extra API calls.
 
 from teamarr.core.naming import team_with_article
 from teamarr.templates.context import GameContext, TemplateContext
+from teamarr.templates.rich_preview import build_rich_preview
 from teamarr.templates.variables.registry import (
     Category,
     SuffixRules,
@@ -58,6 +59,18 @@ def extract_game_preview(ctx: TemplateContext, game_ctx: GameContext | None) -> 
     if not game_ctx or not game_ctx.event:
         return ""
     return game_ctx.event.game_preview or ""
+
+
+@register_variable(
+    name="game_preview_rich",
+    category=Category.SUMMARY,
+    suffix_rules=SuffixRules.ALL,
+    description="Deterministic multi-sentence pregame description assembled from "
+    "structured provider facts. Never includes betting information and is empty "
+    "when there is not enough trustworthy data.",
+)
+def extract_game_preview_rich(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    return build_rich_preview(game_ctx.event if game_ctx else None)
 
 
 @register_variable(
