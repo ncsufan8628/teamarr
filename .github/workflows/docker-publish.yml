@@ -1,5 +1,7 @@
 name: Docker Build and Publish
 
+# Kept active in downstream forks for branch test builds and GHCR publishing.
+
 on:
   push:
     branches:
