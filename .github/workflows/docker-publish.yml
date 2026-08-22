@@ -105,7 +105,7 @@ jobs:
           # built and pushed successfully — the cache is an optimization, not a
           # gate.
           cache-to: type=gha,mode=max,ignore-error=true
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           build-args: |
             GIT_BRANCH=${{ steps.branch.outputs.name }}
             GIT_SHA=${{ steps.slug.outputs.sha_short }}
