@@ -199,7 +199,7 @@ def test_baseball_renderer_normalizes_series_summary_grammar():
     assert "with the series tied 1-1." in build_generated_preview(tied)
 
 
-def test_football_parser_and_passing_to_rushing_fallback():
+def test_football_parser_and_renderer_include_all_secondary_stats():
     event = _event(
         sport="football",
         league="nfl",
@@ -211,8 +211,22 @@ def test_football_parser_and_passing_to_rushing_fallback():
     payload = {
         "header": {"week": {"number": 3}, "competitions": [competition]},
         "leaders": [
-            _leader_block("9", [("rushingYards", "Josh Jacobs", "73")]),
-            _leader_block("7", [("passingYards", "Bo Nix", "246")]),
+            _leader_block(
+                "9",
+                [
+                    ("passingYards", "Jordan Love", "221"),
+                    ("rushingYards", "Josh Jacobs", "73"),
+                    ("receivingYards", "Jayden Reed", "79"),
+                ],
+            ),
+            _leader_block(
+                "7",
+                [
+                    ("passingYards", "Bo Nix", "246"),
+                    ("rushingYards", "J.K. Dobbins", "68"),
+                    ("receivingYards", "Courtland Sutton", "84"),
+                ],
+            ),
         ],
         "boxscore": {
             "teams": [
@@ -243,8 +257,12 @@ def test_football_parser_and_passing_to_rushing_fallback():
     assert event.away_rushing_leader == "Josh Jacobs — 73 rushing yards"
     assert "Week 3 preseason matchup" in text
     assert "360 total yards per game, including 162 rushing" in text
-    assert "led by Bo Nix with 246 passing yards" in text
-    assert "led by Josh Jacobs with 73 rushing yards" in text
+    assert "Bo Nix with 246 passing yards" in text
+    assert "J.K. Dobbins with 68 rushing yards" in text
+    assert "Courtland Sutton with 84 receiving yards" in text
+    assert "Jordan Love with 221 passing yards" in text
+    assert "Josh Jacobs with 73 rushing yards" in text
+    assert "Jayden Reed with 79 receiving yards" in text
     assert "6.5" not in text
 
 
@@ -263,7 +281,27 @@ def test_malformed_week_shape_is_empty_not_raw_dict_text():
     assert "unexpected" not in build_generated_preview(event)
 
 
-def test_basketball_parser_and_points_to_rebounds_fallback():
+def test_secondary_leaders_render_when_primary_leader_is_missing():
+    football = _event(
+        sport="football",
+        league="nfl",
+        away_rushing_leader="Josh Jacobs — 73 rushing yards",
+    )
+    basketball = _event(
+        sport="basketball",
+        league="wnba",
+        home_rebounds_leader="Kamilla Cardoso — 8.8 rebounds per game",
+    )
+
+    assert "Josh Jacobs leads the team with 73 rushing yards" in (
+        build_generated_preview(football)
+    )
+    assert "Kamilla Cardoso leads the team with 8.8 rebounds per game" in (
+        build_generated_preview(basketball)
+    )
+
+
+def test_basketball_parser_and_renderer_include_all_secondary_stats():
     event = _event(
         sport="basketball",
         league="wnba",
@@ -273,8 +311,22 @@ def test_basketball_parser_and_points_to_rebounds_fallback():
     payload = {
         "header": {"competitions": [_competition(event)]},
         "leaders": [
-            _leader_block("19", [("reboundsPerGame", "Kamilla Cardoso", "8.8")]),
-            _leader_block("18", [("pointsPerGame", "Leila Lacan", "11.6")]),
+            _leader_block(
+                "19",
+                [
+                    ("pointsPerGame", "Kamilla Cardoso", "14.7"),
+                    ("reboundsPerGame", "Kamilla Cardoso", "8.8"),
+                    ("assistsPerGame", "Natasha Cloud", "5.0"),
+                ],
+            ),
+            _leader_block(
+                "18",
+                [
+                    ("pointsPerGame", "Leila Lacan", "11.6"),
+                    ("reboundsPerGame", "Olivia Nelson-Ododa", "5.9"),
+                    ("assistsPerGame", "Leila Lacan", "4.6"),
+                ],
+            ),
         ],
         "boxscore": {
             "teams": [
@@ -303,8 +355,10 @@ def test_basketball_parser_and_points_to_rebounds_fallback():
     assert event.home_points_leader == "Leila Lacan — 11.6 points per game"
     assert event.away_points_per_game == "87.4"
     assert "averaging 87.4 points while allowing 89.9 per game" in text
-    assert "led by Kamilla Cardoso with 8.8 rebounds per game" in text
-    assert "led by Leila Lacan with 11.6 points per game" in text
+    assert "Kamilla Cardoso with 14.7 points per game and 8.8 rebounds per game" in text
+    assert "Natasha Cloud with 5.0 assists per game" in text
+    assert "Leila Lacan with 11.6 points per game and 4.6 assists per game" in text
+    assert "Olivia Nelson-Ododa with 5.9 rebounds per game" in text
 
 
 def test_named_variables_are_exact_and_generated_preview_is_opt_in():

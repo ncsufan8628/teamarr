@@ -1,6 +1,7 @@
 """Deterministic generated prose composed only from public typed fields."""
 
 import re
+from collections import OrderedDict
 
 from teamarr.core import Event, Team
 
@@ -117,6 +118,40 @@ def _leader_clause(value: str) -> str:
     return f"led by {name} with {detail}"
 
 
+def _join_phrases(values: list[str]) -> str:
+    if len(values) < 2:
+        return values[0] if values else ""
+    if len(values) == 2:
+        return " and ".join(values)
+    return f"{', '.join(values[:-1])}, and {values[-1]}"
+
+
+def _leaders_sentence(values: list[str]) -> str:
+    """Render all exact leader fields, grouping repeated athlete names."""
+    grouped: OrderedDict[str, list[str]] = OrderedDict()
+    for value in values:
+        if not value:
+            continue
+        if " — " in value:
+            name, detail = value.split(" — ", 1)
+        else:
+            name, detail = value, ""
+        grouped.setdefault(name, [])
+        if detail and detail not in grouped[name]:
+            grouped[name].append(detail)
+    if not grouped:
+        return ""
+    athlete_facts = [
+        f"{name} with {_join_phrases(details)}" if details else name
+        for name, details in grouped.items()
+    ]
+    if len(grouped) == 1:
+        name, details = next(iter(grouped.items()))
+        suffix = f" with {_join_phrases(details)}" if details else ""
+        return f"{name} leads the team{suffix}."
+    return f"Team leaders include {'; '.join(athlete_facts)}."
+
+
 def _series_clause(value: str) -> str:
     """Turn ESPN's compact series summary into a grammatical clause."""
     summary = value.strip().rstrip(".")
@@ -199,18 +234,12 @@ def _football_sentence(event: Event, side: str) -> str:
         text += f", producing {_clean_number(total)} total yards per game"
         if rushing:
             text += f", including {_clean_number(rushing)} rushing"
-    leader = next(
-        (
-            getattr(event, f"{side}_{field}")
-            for field in ("passing_leader", "rushing_leader", "receiving_leader")
-            if getattr(event, f"{side}_{field}")
-        ),
-        "",
-    )
-    clause = _leader_clause(leader)
-    if clause:
-        text += f", {clause}"
-    return text + "."
+    leaders = [
+        getattr(event, f"{side}_{field}")
+        for field in ("passing_leader", "rushing_leader", "receiving_leader")
+    ]
+    leader_sentence = _leaders_sentence(leaders)
+    return " ".join(part for part in (text + ".", leader_sentence) if part)
 
 
 def _basketball_sentence(event: Event, side: str) -> str:
@@ -230,18 +259,12 @@ def _basketball_sentence(event: Event, side: str) -> str:
             text += " per game"
     elif allowed:
         text += f", allowing {_clean_number(allowed)} points per game"
-    leader = next(
-        (
-            getattr(event, f"{side}_{field}")
-            for field in ("points_leader", "rebounds_leader", "assists_leader")
-            if getattr(event, f"{side}_{field}")
-        ),
-        "",
-    )
-    clause = _leader_clause(leader)
-    if clause:
-        text += f", {clause}"
-    return text + "."
+    leaders = [
+        getattr(event, f"{side}_{field}")
+        for field in ("points_leader", "rebounds_leader", "assists_leader")
+    ]
+    leader_sentence = _leaders_sentence(leaders)
+    return " ".join(part for part in (text + ".", leader_sentence) if part)
 
 
 def build_generated_preview(event: Event | None) -> str:

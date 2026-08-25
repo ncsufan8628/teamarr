@@ -464,11 +464,12 @@ Provider editorial/context copy for a game, passed through raw. These are **spar
 
 `{generated_preview}` is not included in any starter template. To opt in, add
 the `has_generated_preview` condition and use `{generated_preview}` in that
-row. The formatter omits missing facts and uses these player-detail fallbacks:
-baseball probable starter, then home-run, batting-average, or RBI leader;
-football passing, then rushing or receiving leader; basketball points, then
-rebounds or assists leader. Records and recent form are added when available,
-as are football yardage and basketball points-for/points-allowed team stats.
+row. The formatter omits missing facts. Baseball includes the probable starter
+and home-run leader, falling back to the batting-average or RBI leader when the
+home-run leader is unavailable. Football includes every available passing,
+rushing, and receiving leader; basketball likewise includes every available
+points, rebounds, and assists leader. Records and recent form are added when
+available, as are football yardage and basketball points-for/points-allowed team stats.
 Hockey and other sports are currently unsupported and resolve to an empty
 value. All prose is deterministic, source-grounded, and excludes betting data.
 
