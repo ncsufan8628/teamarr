@@ -178,6 +178,23 @@ def test_baseball_renderer_uses_starter_then_exact_leader_fallbacks():
     assert "72-59 after going 3-2 in its last 5 games" in text
 
 
+def test_baseball_renderer_normalizes_series_summary_grammar():
+    leading = _event(
+        series_summary="Boston Red Sox leads series 1-0",
+        away_probable_starter="Payton Tolle (8-6, 3.08 ERA)",
+    )
+    tied = _event(
+        series_summary="Series tied 1-1",
+        away_probable_starter="Payton Tolle (8-6, 3.08 ERA)",
+    )
+
+    assert (
+        "with the Boston Red Sox leading the series 1-0."
+        in build_generated_preview(leading)
+    )
+    assert "with the series tied 1-1." in build_generated_preview(tied)
+
+
 def test_football_parser_and_passing_to_rushing_fallback():
     event = _event(
         sport="football",

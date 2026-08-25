@@ -1,5 +1,7 @@
 """Deterministic generated prose composed only from public typed fields."""
 
+import re
+
 from teamarr.core import Event, Team
 
 SUPPORTED_SPORTS = frozenset({"baseball", "football", "basketball"})
@@ -115,6 +117,22 @@ def _leader_clause(value: str) -> str:
     return f"led by {name} with {detail}"
 
 
+def _series_clause(value: str) -> str:
+    """Turn ESPN's compact series summary into a grammatical clause."""
+    summary = value.strip().rstrip(".")
+    leading = re.fullmatch(
+        r"(.+?)\s+leads?\s+(?:(?:the)\s+)?((?:season\s+)?series)\s+(.+)",
+        summary,
+        flags=re.IGNORECASE,
+    )
+    if leading:
+        team, series_kind, result = leading.groups()
+        return f"the {team} leading the {series_kind.lower()} {result}"
+    if summary.lower().startswith("series "):
+        return f"the {summary[0].lower() + summary[1:]}"
+    return summary
+
+
 def _base_sentence(event: Event) -> str:
     away = event.away_team.name
     home = event.home_team.name
@@ -124,7 +142,7 @@ def _base_sentence(event: Event) -> str:
         phase = "preseason " if event.season_type == "preseason" else ""
         return f"The {away} visit the {home}{location} for a Week {event.week} {phase}matchup."
     if event.sport == "baseball" and event.series_summary:
-        summary = event.series_summary.rstrip(".")
+        summary = _series_clause(event.series_summary)
         return f"The {away} visit the {home}{location}, with {summary}."
     return f"The {away} visit the {home}{location}."
 
