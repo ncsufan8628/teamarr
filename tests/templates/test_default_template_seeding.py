@@ -456,6 +456,26 @@ def test_prior_generation_content_healed_to_current(db_conn):
     assert row.subtitle_template == "{away_team} {at_vs} {home_team}"
 
 
+def test_retired_private_rich_rows_are_removed_from_untouched_starter(db_conn):
+    """The fork's prior opt-out rows heal to the new opt-in starter content."""
+    from teamarr.database.default_templates import _with_retired_rich_preview_rows
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    spec = next(s for s in DEFAULT_TEMPLATE_SET if s["name"] == "Default Team (Starter)")
+    prior = _with_retired_rich_preview_rows(spec)
+    tid = create_template(db_conn, **prior)
+
+    seed_default_templates(db_conn)
+
+    row = {t.name: t for t in get_all_templates(db_conn)}["Default Team (Starter)"]
+    assert row.id == tid
+    assert all(
+        item.get("condition") != "has_rich_preview"
+        for item in row.conditional_descriptions + row.pregame_conditional_rows
+    )
+
+
 def test_soccer_idle_generation_healed(db_conn):
     """#373: a pre-#368 Soccer Team row (base 'game' idle text) heals to the
     match-register idle content."""

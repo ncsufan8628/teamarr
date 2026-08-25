@@ -1,24 +1,48 @@
-"""Parse ESPN summary facts for deterministic, provider-neutral previews.
+"""Parse ESPN summary facts into typed, public ``Event`` fields.
 
-The returned structure intentionally excludes pickcenter, odds and predictor.
-Presentation belongs to the template layer, not the provider boundary.
+Only source-grounded pregame facts are read. Pickcenter, odds and predictor
+payloads are deliberately outside every code path in this module.
 """
 
-from __future__ import annotations
-
 import re
-from datetime import UTC, datetime
 from typing import Any
 
 from teamarr.core import Event
 
+_LEADER_FIELDS = {
+    "baseball": {
+        "homeRuns": ("home_runs_leader", "home runs"),
+        "avg": ("batting_average_leader", "batting average"),
+        "RBIs": ("rbi_leader", "RBI"),
+    },
+    "football": {
+        "passingYards": ("passing_leader", "passing yards"),
+        # Some ESPN payloads provide a fully formatted stat line (for example
+        # "19/31, 181 YDS") under the *Leader names.  Do not append another
+        # label to those already self-describing values.
+        "passingLeader": ("passing_leader", ""),
+        "rushingYards": ("rushing_leader", "rushing yards"),
+        "rushingLeader": ("rushing_leader", ""),
+        "receivingYards": ("receiving_leader", "receiving yards"),
+        "receivingLeader": ("receiving_leader", ""),
+    },
+    "basketball": {
+        "pointsPerGame": ("points_leader", "points per game"),
+        "reboundsPerGame": ("rebounds_leader", "rebounds per game"),
+        "assistsPerGame": ("assists_leader", "assists per game"),
+    },
+}
 
-def _stat_map(items: list[dict] | None) -> dict[str, str]:
-    return {
-        str(item.get("name")): str(item.get("displayValue"))
-        for item in items or []
-        if item.get("name") and item.get("displayValue") not in (None, "")
-    }
+_TEAM_STAT_FIELDS = {
+    "football": {
+        "yardsPerGame": "total_yards_per_game",
+        "rushingYardsPerGame": "rushing_yards_per_game",
+    },
+    "basketball": {
+        "avgPoints": "points_per_game",
+        "avgPointsAgainst": "points_allowed_per_game",
+    },
+}
 
 
 def _team_side(event: Event, team_id: str) -> str | None:
@@ -27,6 +51,63 @@ def _team_side(event: Event, team_id: str) -> str | None:
     if team_id == str(event.away_team.id):
         return "away"
     return None
+
+
+def _display_value(item: dict) -> str:
+    value = item.get("displayValue")
+    return "" if value in (None, "") else str(value)
+
+
+def _stat_map(items: list[dict] | None) -> dict[str, str]:
+    return {
+        str(item.get("name")): _display_value(item)
+        for item in items or []
+        if item.get("name") and _display_value(item)
+    }
+
+
+def _flatten_team_stats(items: list[dict] | None) -> dict[str, str]:
+    """Flatten both ESPN's grouped baseball and flat team-stat shapes."""
+    stats: dict[str, str] = {}
+    for item in items or []:
+        nested = item.get("stats")
+        if nested is not None:
+            stats.update(_stat_map(nested))
+        elif item.get("name") and _display_value(item):
+            stats[str(item["name"])] = _display_value(item)
+    return stats
+
+
+def _format_leader(name: str, value: str, label: str) -> str:
+    if not name or not value:
+        return ""
+    detail = f"{value} {label}".strip()
+    return f"{name} — {detail}"
+
+
+def _format_probable(probable: dict) -> str:
+    athlete = probable.get("athlete") or {}
+    name = athlete.get("displayName") or ""
+    if not name:
+        return ""
+    stats = _stat_map(
+        ((probable.get("statistics") or {}).get("splits") or {}).get("categories")
+    )
+    details = []
+    if stats.get("wins") and stats.get("losses"):
+        details.append(f"{stats['wins']}-{stats['losses']}")
+    if stats.get("ERA"):
+        details.append(f"{stats['ERA']} ERA")
+    return f"{name} ({', '.join(details)})" if details else name
+
+
+def _parse_week(raw: Any) -> int | None:
+    if isinstance(raw, dict):
+        raw = raw.get("number") or raw.get("value")
+    try:
+        return int(raw) if raw not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
 
 
 def _expand_team_abbreviations(summary: str, competition: dict, event: Event) -> str:
@@ -41,7 +122,6 @@ def _expand_team_abbreviations(summary: str, competition: dict, event: Event) ->
     for team in (event.home_team, event.away_team):
         if team.abbreviation and team.name:
             replacements.setdefault(team.abbreviation.casefold(), team.name)
-
     if not replacements:
         return summary
     aliases = "|".join(
@@ -56,140 +136,87 @@ def _expand_team_abbreviations(summary: str, competition: dict, event: Event) ->
     )
 
 
-def _current_recent_games(events: list[dict], event: Event) -> list[dict]:
-    """Keep results plausibly belonging to the current competition phase.
-
-    ESPN's NFL lastFiveGames can mix January games from the prior season into
-    an August preseason payload.  A 90-day boundary prevents that stale form
-    from becoming current-preview prose without encoding league calendars.
-    """
-    result = []
-    for item in events:
-        raw_date = item.get("gameDate") or item.get("date")
-        if raw_date:
-            try:
-                played = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
-                if abs((event.start_time - played).days) > 90:
-                    continue
-            except (TypeError, ValueError):
-                continue
-        game_result = (item.get("gameResult") or "").upper()
-        if game_result not in {"W", "L", "T"}:
-            continue
-        opponent = item.get("opponent") or {}
-        result.append(
-            {
-                "result": game_result,
-                "score": item.get("score") or "",
-                "opponent": opponent.get("displayName") if isinstance(opponent, dict) else "",
-            }
-        )
-    return result[:5]
+def _leader_blocks(data: dict, competition: dict) -> list[dict]:
+    """Return summary leaders, falling back to competitor-scoped leaders."""
+    if data.get("leaders"):
+        return data["leaders"]
+    blocks = []
+    for competitor in competition.get("competitors") or []:
+        if competitor.get("leaders"):
+            blocks.append(
+                {
+                    "team": competitor.get("team") or {},
+                    "leaders": competitor["leaders"],
+                }
+            )
+    return blocks
 
 
-def parse_rich_preview(data: dict[str, Any], event: Event) -> dict[str, Any]:
-    """Extract trustworthy summary facts shared by sport-aware renderers."""
+def apply_generated_preview_fields(data: dict[str, Any], event: Event) -> None:
+    """Populate typed preview fields on ``event`` from an ESPN summary."""
     competition = ((data.get("header") or {}).get("competitions") or [{}])[0]
-    teams: dict[str, dict[str, Any]] = {"home": {}, "away": {}}
+    header = data.get("header") or {}
+    event.week = _parse_week(header.get("week") or competition.get("week"))
 
     for competitor in competition.get("competitors") or []:
         side = competitor.get("homeAway")
-        if side not in teams:
+        if side not in {"home", "away"}:
             continue
         record = next(
             (
-                r.get("summary") or r.get("displayValue")
-                for r in competitor.get("record") or []
-                if r.get("type") in {"total", "overall"}
+                item.get("summary") or item.get("displayValue")
+                for item in competitor.get("record") or competitor.get("records") or []
+                if item.get("type") in {"total", "overall"}
             ),
             "",
         )
+        if record:
+            setattr(event, f"{side}_team_record", str(record))
         probable = next(
-            (p for p in competitor.get("probables") or [] if p.get("athlete")),
+            (item for item in competitor.get("probables") or [] if item.get("athlete")),
             None,
         )
-        probable_data: dict[str, Any] = {}
-        if probable:
-            probable_data = {
-                "name": (probable.get("athlete") or {}).get("displayName") or "",
-                "stats": _stat_map(
-                    ((probable.get("statistics") or {}).get("splits") or {}).get("categories")
-                ),
-            }
-        teams[side] = {
-            "id": str((competitor.get("team") or {}).get("id") or ""),
-            "name": (competitor.get("team") or {}).get("displayName") or "",
-            "record": record or "",
-            "probable": probable_data,
-            "leaders": [],
-            "stats": {},
-            "recent": [],
-        }
+        if event.sport == "baseball" and probable:
+            setattr(event, f"{side}_probable_starter", _format_probable(probable))
 
-    for block in data.get("leaders") or []:
+    leader_contract = _LEADER_FIELDS.get(event.sport, {})
+    for block in _leader_blocks(data, competition):
         side = _team_side(event, str((block.get("team") or {}).get("id") or ""))
         if not side:
             continue
         for category in block.get("leaders") or []:
+            mapping = leader_contract.get(category.get("name"))
             leader = (category.get("leaders") or [{}])[0]
             athlete = leader.get("athlete") or {}
-            if athlete.get("displayName") and leader.get("displayValue") not in (None, ""):
-                teams[side]["leaders"].append(
-                    {
-                        "stat": category.get("name") or "",
-                        "label": category.get("displayName") or "",
-                        "name": athlete.get("displayName"),
-                        "value": str(leader.get("displayValue")),
-                    }
-                )
+            if not mapping:
+                continue
+            suffix, label = mapping
+            rendered = _format_leader(
+                athlete.get("displayName") or "",
+                _display_value(leader),
+                label,
+            )
+            if rendered:
+                setattr(event, f"{side}_{suffix}", rendered)
 
-    for block in data.get("lastFiveGames") or []:
-        side = _team_side(event, str((block.get("team") or {}).get("id") or ""))
-        if side:
-            teams[side]["recent"] = _current_recent_games(block.get("events") or [], event)
-
+    stat_contract = _TEAM_STAT_FIELDS.get(event.sport, {})
     for block in (data.get("boxscore") or {}).get("teams") or []:
         side = _team_side(event, str((block.get("team") or {}).get("id") or ""))
         if not side:
             continue
-        stats: dict[str, str] = {}
-        for group in block.get("statistics") or []:
-            if group.get("stats") is not None:  # baseball-style grouped stats
-                prefix = group.get("name") or "team"
-                stats.update({f"{prefix}.{k}": v for k, v in _stat_map(group["stats"]).items()})
-            elif group.get("name") and group.get("displayValue") not in (None, ""):
-                stats[str(group["name"])] = str(group["displayValue"])
-        teams[side]["stats"] = stats
+        stats = _flatten_team_stats(block.get("statistics"))
+        for espn_name, suffix in stat_contract.items():
+            if stats.get(espn_name):
+                setattr(event, f"{side}_{suffix}", stats[espn_name])
 
-    series_options = [s for s in data.get("seasonseries") or [] if s.get("type") != "preseason"]
-    series = next((s for s in series_options if s.get("type") == "current"), None)
-    series = series or next((s for s in series_options if s.get("type") == "season"), None)
-    series_data = {}
-    if series:
-        summary = _expand_team_abbreviations(series.get("summary") or "", competition, event)
-        series_data = {
-            "summary": summary,
-            "score": series.get("seriesScore") or "",
-            "games": series.get("totalCompetitions"),
-            "completed": bool(series.get("completed")),
-        }
-
-    header = data.get("header") or {}
-    has_detail = bool(
-        series_data.get("summary")
-        or any(
-            team.get("probable") or team.get("leaders") or team.get("recent") or team.get("stats")
-            for team in teams.values()
-        )
+    series_options = [
+        item for item in data.get("seasonseries") or [] if item.get("type") != "preseason"
+    ]
+    series = next((item for item in series_options if item.get("type") == "current"), None)
+    series = series or next(
+        (item for item in series_options if item.get("type") == "season"), None
     )
-    return {
-        "version": 1,
-        "fetched_at": datetime.now(UTC).isoformat(),
-        "complete": has_detail,
-        "sport": event.sport,
-        "league": event.league,
-        "season_type": event.season_type or "",
-        "week": (header.get("week") or competition.get("week")),
-        "teams": teams,
-        "series": series_data,
-    }
+    if series and series.get("summary"):
+        event.series_summary = _expand_team_abbreviations(
+            str(series["summary"]), competition, event
+        )

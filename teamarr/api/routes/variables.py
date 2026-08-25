@@ -341,8 +341,8 @@ def get_conditions(template_type: str = "team"):
     # description chains.
     summary_conditions = [
         {
-            "name": "has_rich_preview",
-            "description": "Source-grounded rich pregame description is available",
+            "name": "has_generated_preview",
+            "description": "Source-grounded generated pregame description is available",
             "requires_value": False,
             "providers": "all",
         },

@@ -1,0 +1,224 @@
+"""Deterministic generated prose composed only from public typed fields."""
+
+from teamarr.core import Event, Team
+
+SUPPORTED_SPORTS = frozenset({"baseball", "football", "basketball"})
+
+_DETAIL_FIELDS = (
+    "home_team_record",
+    "away_team_record",
+    "home_last_five",
+    "away_last_five",
+    "series_summary",
+    "week",
+    "home_probable_starter",
+    "away_probable_starter",
+    "home_home_runs_leader",
+    "away_home_runs_leader",
+    "home_batting_average_leader",
+    "away_batting_average_leader",
+    "home_rbi_leader",
+    "away_rbi_leader",
+    "home_passing_leader",
+    "away_passing_leader",
+    "home_rushing_leader",
+    "away_rushing_leader",
+    "home_receiving_leader",
+    "away_receiving_leader",
+    "home_total_yards_per_game",
+    "away_total_yards_per_game",
+    "home_rushing_yards_per_game",
+    "away_rushing_yards_per_game",
+    "home_points_leader",
+    "away_points_leader",
+    "home_rebounds_leader",
+    "away_rebounds_leader",
+    "home_assists_leader",
+    "away_assists_leader",
+    "home_points_per_game",
+    "away_points_per_game",
+    "home_points_allowed_per_game",
+    "away_points_allowed_per_game",
+)
+
+_ENRICHED_FIELDS = tuple(
+    field
+    for field in _DETAIL_FIELDS
+    if field
+    not in {
+        "home_team_record",
+        "away_team_record",
+        "home_last_five",
+        "away_last_five",
+        "week",
+    }
+)
+
+
+def has_generated_preview_detail(event: Event | None) -> bool:
+    """Return whether a supported event carries meaningful pregame facts."""
+    return bool(
+        event
+        and event.sport in SUPPORTED_SPORTS
+        and any(getattr(event, field, None) for field in _DETAIL_FIELDS)
+    )
+
+
+def has_generated_preview_enrichment(event: Event | None) -> bool:
+    """Return whether the event has facts beyond basic record/form context."""
+    return bool(
+        event
+        and event.sport in SUPPORTED_SPORTS
+        and any(getattr(event, field, None) for field in _ENRICHED_FIELDS)
+    )
+
+
+def _clean_number(value: str) -> str:
+    return value[:-2] if value.endswith(".0") else value
+
+
+def _team_subject(team: Team) -> str:
+    short = (team.short_name or "").strip()
+    full = team.name.strip()
+    if short and full.lower().endswith(f" {short.lower()}"):
+        return full[: -(len(short) + 1)]
+    return full
+
+
+def _recent_phrase(value: str) -> str:
+    if not value or "-" not in value:
+        return ""
+    wins, losses = value.split("-", 1)
+    try:
+        count = int(wins) + int(losses)
+    except ValueError:
+        return ""
+    return f"after going {wins}-{losses} in its last {count} games"
+
+
+def _record_intro(name: str, record: str, recent: str) -> str:
+    pieces = []
+    if record:
+        pieces.append(f"enters at {record}")
+    if recent:
+        pieces.append(_recent_phrase(recent))
+    pieces = [piece for piece in pieces if piece]
+    return f"{name} {' '.join(pieces)}" if pieces else name
+
+
+def _leader_clause(value: str) -> str:
+    if not value:
+        return ""
+    if " — " not in value:
+        return f"led by {value}"
+    name, detail = value.split(" — ", 1)
+    return f"led by {name} with {detail}"
+
+
+def _base_sentence(event: Event) -> str:
+    away = event.away_team.name
+    home = event.home_team.name
+    venue = event.venue.name if event.venue else ""
+    location = f" at {venue}" if venue else ""
+    if event.sport == "football" and event.week:
+        phase = "preseason " if event.season_type == "preseason" else ""
+        return f"The {away} visit the {home}{location} for a Week {event.week} {phase}matchup."
+    if event.sport == "baseball" and event.series_summary:
+        summary = event.series_summary.rstrip(".")
+        return f"The {away} visit the {home}{location}, with {summary}."
+    return f"The {away} visit the {home}{location}."
+
+
+def _baseball_sentence(event: Event, side: str) -> str:
+    team = getattr(event, f"{side}_team")
+    text = _record_intro(
+        _team_subject(team),
+        getattr(event, f"{side}_team_record"),
+        getattr(event, f"{side}_last_five"),
+    )
+    starter = getattr(event, f"{side}_probable_starter")
+    leader = next(
+        (
+            getattr(event, f"{side}_{field}")
+            for field in ("home_runs_leader", "batting_average_leader", "rbi_leader")
+            if getattr(event, f"{side}_{field}")
+        ),
+        "",
+    )
+    if starter:
+        return f"{text}. Probable starter {starter}."
+    clause = _leader_clause(leader)
+    return f"{text}, {clause}." if clause else f"{text}."
+
+
+def _football_sentence(event: Event, side: str) -> str:
+    team = getattr(event, f"{side}_team")
+    text = _record_intro(
+        _team_subject(team),
+        getattr(event, f"{side}_team_record"),
+        getattr(event, f"{side}_last_five"),
+    )
+    total = getattr(event, f"{side}_total_yards_per_game")
+    rushing = getattr(event, f"{side}_rushing_yards_per_game")
+    if total:
+        text += f", producing {_clean_number(total)} total yards per game"
+        if rushing:
+            text += f", including {_clean_number(rushing)} rushing"
+    leader = next(
+        (
+            getattr(event, f"{side}_{field}")
+            for field in ("passing_leader", "rushing_leader", "receiving_leader")
+            if getattr(event, f"{side}_{field}")
+        ),
+        "",
+    )
+    clause = _leader_clause(leader)
+    if clause:
+        text += f", {clause}"
+    return text + "."
+
+
+def _basketball_sentence(event: Event, side: str) -> str:
+    team = getattr(event, f"{side}_team")
+    text = _record_intro(
+        _team_subject(team),
+        getattr(event, f"{side}_team_record"),
+        getattr(event, f"{side}_last_five"),
+    )
+    scored = getattr(event, f"{side}_points_per_game")
+    allowed = getattr(event, f"{side}_points_allowed_per_game")
+    if scored:
+        text += f", averaging {_clean_number(scored)} points"
+        if allowed:
+            text += f" while allowing {_clean_number(allowed)} per game"
+        else:
+            text += " per game"
+    elif allowed:
+        text += f", allowing {_clean_number(allowed)} points per game"
+    leader = next(
+        (
+            getattr(event, f"{side}_{field}")
+            for field in ("points_leader", "rebounds_leader", "assists_leader")
+            if getattr(event, f"{side}_{field}")
+        ),
+        "",
+    )
+    clause = _leader_clause(leader)
+    if clause:
+        text += f", {clause}"
+    return text + "."
+
+
+def build_generated_preview(event: Event | None) -> str:
+    """Build source-grounded prose for supported sports, or return empty."""
+    if not has_generated_preview_detail(event):
+        return ""
+    assert event is not None
+    render = {
+        "baseball": _baseball_sentence,
+        "football": _football_sentence,
+        "basketball": _basketball_sentence,
+    }[event.sport]
+    return " ".join(
+        (_base_sentence(event), render(event, "away"), render(event, "home"))
+    )

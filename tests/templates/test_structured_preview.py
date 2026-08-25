@@ -116,51 +116,52 @@ def test_cached_preview_snapshot_survives_kickoff():
         "series_summary": "",
         "home_last_five": "4-1",
         "away_last_five": "2-3",
-        "rich_preview_data": {"version": 1, "complete": True},
+        "home_probable_starter": "Starter One (8-2, 3.10 ERA)",
     }
-    svc._cache.set("event_preview:mlb:401", cached_fields, 3600)
+    svc._cache.set("event_preview_v2:mlb:401", cached_fields, 3600)
     with patch.object(SportsDataService, "get_event") as fetch:
         event = svc.enrich_event_preview(_event(start_in_hours=-2))
     assert fetch.call_count == 0
     assert event.game_preview == "Pregame copy"
-    assert event.rich_preview_data["complete"] is True
+    assert event.home_probable_starter == "Starter One (8-2, 3.10 ERA)"
 
 
 def test_status_refresh_cannot_replace_frozen_preview_with_live_stats():
     svc = _service()
-    frozen = {"version": 1, "complete": True, "teams": {"home": {"record": "10-2"}}}
-    live = {"version": 1, "complete": True, "teams": {"home": {"stats": {"points": "7"}}}}
-    original = _event(rich_preview_data=frozen)
-    fresh = _event(status=EventStatus(state="in_progress"), rich_preview_data=live)
+    original = _event(
+        home_points_per_game="117.2",
+        home_points_leader="Player — 28.4 points per game",
+    )
+    fresh = _event(
+        status=EventStatus(state="in_progress"),
+        home_points_per_game="7",
+        home_points_leader="Live Player — 5 points",
+    )
     with patch.object(SportsDataService, "get_event", return_value=fresh):
         refreshed = svc.refresh_event_status(original)
     assert refreshed.status.state == "in_progress"
-    assert refreshed.rich_preview_data == frozen
+    assert refreshed.home_points_per_game == "117.2"
+    assert refreshed.home_points_leader == "Player — 28.4 points per game"
 
 
 def test_status_refresh_does_not_create_preview_from_live_summary():
     svc = _service()
-    live = {
-        "version": 1,
-        "complete": True,
-        "teams": {"home": {"stats": {"points": "7"}}},
-    }
     original = _event()
-    fresh = _event(status=EventStatus(state="in_progress"), rich_preview_data=live)
+    fresh = _event(status=EventStatus(state="in_progress"), home_points_per_game="7")
     with patch.object(SportsDataService, "get_event", return_value=fresh):
         refreshed = svc.refresh_event_status(original)
     assert refreshed.status.state == "in_progress"
-    assert refreshed.rich_preview_data == {}
+    assert refreshed.home_points_per_game == ""
 
 
 def test_partial_last_five_does_not_block_richer_refresh():
     svc = _service()
-    fresh = _event(home_last_five="4-1", rich_preview_data={"version": 1})
+    fresh = _event(home_last_five="4-1", home_probable_starter="Starter (8-2, 3.10 ERA)")
     with patch.object(SportsDataService, "get_event", return_value=fresh) as fetch:
         ev = svc.enrich_event_preview(_event(home_last_five="4-1"))
         assert fetch.call_count == 1
     assert ev.home_last_five == "4-1"
-    assert ev.rich_preview_data == {"version": 1}
+    assert ev.home_probable_starter == "Starter (8-2, 3.10 ERA)"
 
 
 def test_enrich_fetches_caches_and_overlays():

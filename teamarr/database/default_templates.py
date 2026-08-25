@@ -368,7 +368,7 @@ def _matches_any_generation(row, name: str, spec: dict) -> bool:
     generation (crossed with prior title variants) — i.e., it is provably
     our unedited seed. Any user edit fails every candidate and the row is
     left alone."""
-    candidates = [spec, *_prior_generations(name, spec)]
+    candidates = [spec, _with_retired_rich_preview_rows(spec), *_prior_generations(name, spec)]
     old_title = PRIOR_TITLE_UPGRADES.get(name)
     if old_title:
         for cand in list(candidates):
@@ -376,6 +376,45 @@ def _matches_any_generation(row, name: str, spec: dict) -> bool:
             titled["title_format"] = old_title
             candidates.append(titled)
     return any(_content_matches(row, cand) for cand in candidates)
+
+
+def _with_retired_rich_preview_rows(spec: dict) -> dict:
+    """Reconstruct the opt-out rich-preview defaults from this fork.
+
+    The first private implementation inserted these rows into every starter.
+    They are now retired because generated prose must be explicitly enabled.
+    Registering that exact content generation lets startup healing remove the
+    rows from untouched starters while preserving any user-edited template.
+    """
+    prior = copy.deepcopy(spec)
+    prior["conditional_descriptions"].insert(
+        0,
+        {
+            "condition": "has_rich_preview",
+            "condition_value": None,
+            "template": "{game_preview_rich}",
+            "priority": 5,
+            "label": "Rich preview (structured)",
+        },
+    )
+    pregame_rows = prior.get("pregame_conditional_rows") or []
+    provider_row = next(
+        (row for row in pregame_rows if row.get("condition") == "has_preview"),
+        None,
+    )
+    if provider_row is not None:
+        suffix = ".next" if str(provider_row.get("template", "")).endswith(".next}") else ""
+        pregame_rows.insert(
+            0,
+            {
+                "condition": "has_rich_preview",
+                "condition_value": None,
+                "template": f"{{game_preview_rich{suffix}}}",
+                "priority": 5,
+                "label": "Rich preview (structured)",
+            },
+        )
+    return prior
 
 
 def _team_base(**overrides) -> dict:
@@ -482,13 +521,6 @@ def _team_base(**overrides) -> dict:
         ],
         "pregame_conditional_rows": [
             {
-                "condition": "has_rich_preview",
-                "condition_value": None,
-                "template": "{game_preview_rich.next}",
-                "priority": 5,
-                "label": "Rich preview (structured)",
-            },
-            {
                 "condition": "has_preview",
                 "condition_value": None,
                 "template": "{game_preview.next}",
@@ -505,13 +537,6 @@ def _team_base(**overrides) -> dict:
             "description": "No upcoming {team_name} games scheduled.",
         },
         "conditional_descriptions": [
-            {
-                "condition": "has_rich_preview",
-                "condition_value": None,
-                "template": "{game_preview_rich}",
-                "priority": 5,
-                "label": "Rich preview (structured)",
-            },
             {
                 "condition": "has_preview",
                 "condition_value": None,
@@ -650,13 +675,6 @@ def _event_base(**overrides) -> dict:
         "idle_conditional_rows": [],
         "pregame_conditional_rows": [
             {
-                "condition": "has_rich_preview",
-                "condition_value": None,
-                "template": "{game_preview_rich}",
-                "priority": 5,
-                "label": "Rich preview (structured)",
-            },
-            {
                 "condition": "has_preview",
                 "condition_value": None,
                 "template": "{game_preview}",
@@ -673,13 +691,6 @@ def _event_base(**overrides) -> dict:
             "description": "",
         },
         "conditional_descriptions": [
-            {
-                "condition": "has_rich_preview",
-                "condition_value": None,
-                "template": "{game_preview_rich}",
-                "priority": 5,
-                "label": "Rich preview (structured)",
-            },
             {
                 "condition": "has_preview",
                 "condition_value": None,
@@ -744,15 +755,6 @@ def _event_base(**overrides) -> dict:
     base.update(overrides)
     return base
 
-
-# Shared conditional-description rows (structured rich preview, then provider copy).
-_RICH_PREVIEW_ROW = {
-    "condition": "has_rich_preview",
-    "condition_value": None,
-    "template": "{game_preview_rich}",
-    "priority": 5,
-    "label": "Rich preview (structured)",
-}
 
 _PREVIEW_ROW = {
     "condition": "has_preview",
@@ -834,7 +836,6 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             "art_url": _ART_NEXT,
         },
         conditional_descriptions=[
-            dict(_RICH_PREVIEW_ROW),
             dict(_PREVIEW_ROW),
             dict(_MATCH_NOTE_ROW),
             {
@@ -865,7 +866,6 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
     _team_base(
         name="College Team (Starter)",
         conditional_descriptions=[
-            dict(_RICH_PREVIEW_ROW),
             dict(_PREVIEW_ROW),
             # Marquee note: bowls, CFP rounds, tournament designations
             # ('CFP Quarterfinal at the Cotton Bowl Classic. …', #355 item 2).
@@ -938,7 +938,6 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
     _event_base(
         name="College Event (Starter)",
         conditional_descriptions=[
-            dict(_RICH_PREVIEW_ROW),
             dict(_PREVIEW_ROW),
             # Marquee note: bowls, CFP rounds, tournament designations
             # ('CFP Quarterfinal at the Cotton Bowl Classic. …', #355 item 2).
@@ -1013,7 +1012,6 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             "art_url": _EVENT_ART,
         },
         conditional_descriptions=[
-            dict(_RICH_PREVIEW_ROW),
             dict(_PREVIEW_ROW),
             dict(_MATCH_NOTE_ROW),
             {
@@ -1079,7 +1077,6 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             },
         ],
         conditional_descriptions=[
-            dict(_RICH_PREVIEW_ROW),
             {
                 "condition": "has_preview",
                 "condition_value": None,
@@ -1116,7 +1113,6 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             "art_url": _EVENT_ART,
         },
         conditional_descriptions=[
-            dict(_RICH_PREVIEW_ROW),
             dict(_PREVIEW_ROW),
             dict(_MATCH_NOTE_ROW),
             {
@@ -1189,7 +1185,6 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             },
         ],
         conditional_descriptions=[
-            dict(_RICH_PREVIEW_ROW),
             {
                 "condition": "has_preview",
                 "condition_value": None,
@@ -1262,7 +1257,6 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             },
         ],
         conditional_descriptions=[
-            dict(_RICH_PREVIEW_ROW),
             dict(_PREVIEW_ROW),
             {
                 "condition": None,
