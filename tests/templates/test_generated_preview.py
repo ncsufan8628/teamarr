@@ -161,20 +161,24 @@ def test_baseball_parser_populates_exact_public_fields():
     assert not hasattr(event, "pickcenter")
 
 
-def test_baseball_renderer_uses_starter_then_exact_leader_fallbacks():
+def test_baseball_renderer_includes_starter_and_exact_leader_fallbacks():
     event = _event(
         away_team_record="72-59",
         home_team_record="67-65",
         away_last_five="3-2",
         home_last_five="2-3",
         away_probable_starter="Payton Tolle (8-6, 3.08 ERA)",
+        away_home_runs_leader="Willson Contreras — 26 home runs",
+        home_probable_starter="Tyler Phillips (3-6, 3.67 ERA)",
         home_home_runs_leader="Heriberto Hernandez — 19 home runs",
     )
 
     text = build_generated_preview(event)
 
-    assert "Probable starter Payton Tolle (8-6, 3.08 ERA)" in text
+    assert "led by Willson Contreras with 26 home runs" in text
     assert "led by Heriberto Hernandez with 19 home runs" in text
+    assert "Probable starter Payton Tolle is 8-6 with a 3.08 ERA" in text
+    assert "Probable starter Tyler Phillips is 3-6 with a 3.67 ERA" in text
     assert "72-59 after going 3-2 in its last 5 games" in text
 
 

@@ -133,6 +133,20 @@ def _series_clause(value: str) -> str:
     return summary
 
 
+def _probable_starter_sentence(value: str) -> str:
+    """Render the typed probable-starter value as natural prose."""
+    probable = value.strip()
+    record_and_era = re.fullmatch(
+        r"(.+?)\s+\(([^,()]+),\s*([0-9.]+)\s+ERA\)",
+        probable,
+        flags=re.IGNORECASE,
+    )
+    if record_and_era:
+        name, record, era = record_and_era.groups()
+        return f"Probable starter {name} is {record} with a {era} ERA."
+    return f"Probable starter {probable}."
+
+
 def _base_sentence(event: Event) -> str:
     away = event.away_team.name
     home = event.home_team.name
@@ -163,10 +177,13 @@ def _baseball_sentence(event: Event, side: str) -> str:
         ),
         "",
     )
-    if starter:
-        return f"{text}. Probable starter {starter}."
     clause = _leader_clause(leader)
-    return f"{text}, {clause}." if clause else f"{text}."
+    if clause:
+        text += f", {clause}"
+    sentences = [f"{text}."]
+    if starter:
+        sentences.append(_probable_starter_sentence(starter))
+    return " ".join(sentences)
 
 
 def _football_sentence(event: Event, side: str) -> str:
