@@ -81,8 +81,9 @@ for _name, (_description, _sample) in _FIELD_DEFINITIONS.items():
     category=Category.SUMMARY,
     suffix_rules=SuffixRules.ALL,
     description=(
-        "Optional deterministic preview for baseball, football and basketball, "
-        "assembled from public ESPN-reported fields without betting information"
+        "Optional deterministic preview with sport-specific baseball, football and "
+        "basketball prose and a generic matchup sentence for other sports; assembled "
+        "from public fields without betting information"
     ),
 )
 def extract_generated_preview(ctx: TemplateContext, game_ctx: GameContext | None) -> str:

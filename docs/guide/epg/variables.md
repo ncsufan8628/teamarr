@@ -441,7 +441,7 @@ Provider editorial/context copy for a game, passed through raw. These are **spar
 |----------|-------------|----------|--------|
 | `{game_recap}` | Postgame recap headline — short, self-contained, carries the result. Empty until a game is final | base, .next, .last | `Brunson scores 45, and New York tops Spurs for title` |
 | `{game_preview}` | Pregame preview blurb. Empty once a game is final (use `{game_recap}` then) | base, .next, .last | `Toronto Blue Jays (35-38) vs. Boston Red Sox` |
-| `{generated_preview}` | Opt-in generated preview for baseball, football, and basketball; composed from the named variables below and never betting information | base, .next, .last | `The Packers visit the Broncos at Empower Field...` |
+| `{generated_preview}` | Opt-in sport-specific preview for baseball, football, and basketball, with a generic matchup sentence for other sports; composed from public fields and never betting information | base, .next, .last | `The Packers visit the Broncos at Empower Field...` |
 | `{week}` | Provider-reported football week number | base, .next, .last | `3` |
 | `{home_probable_starter}` / `{away_probable_starter}` | Baseball probable starter with ESPN-reported record and ERA | base, .next, .last | `M. Boyd (8-2, 4.02 ERA)` |
 | `{home_home_runs_leader}` / `{away_home_runs_leader}` | Exact home-run leader fact | base, .next, .last | `S. Ohtani — 30 home runs` |
@@ -470,8 +470,9 @@ home-run leader is unavailable. Football includes every available passing,
 rushing, and receiving leader; basketball likewise includes every available
 points, rebounds, and assists leader. Records and recent form are added when
 available, as are football yardage and basketball points-for/points-allowed team stats.
-Hockey and other sports are currently unsupported and resolve to an empty
-value. All prose is deterministic, source-grounded, and excludes betting data.
+Hockey and other sports receive only a complete generic matchup sentence using
+the away team, home team, and venue. All prose is deterministic, source-grounded,
+and excludes betting data.
 
 {: .note }
 Because these populate only for some games, pair them with other content or a static fallback so a template never renders blank. In main descriptions, gate them with condition rows (`has_preview`, `has_recap`, …); in filler registers, use [filler condition rows](conditions#filler-condition-rows) — the starter set's postgame `has_recap → {game_recap.last}` row is the canonical example. `{game_recap}` and `{game_event_note}` come free from the scoreboard; `{game_preview}` and `{series_summary}` come from the per-event summary fetch that EPG generation already makes (no extra API calls).

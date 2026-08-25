@@ -415,6 +415,20 @@ def test_formatted_football_leader_is_not_given_a_duplicate_label():
     assert "181 YDS passing" not in build_generated_preview(event)
 
 
-def test_unsupported_sport_does_not_generate_preview():
-    event = _event(sport="hockey", league="nhl", home_team_record="10-2")
-    assert build_generated_preview(event) == ""
+def test_unsupported_sport_generates_only_generic_complete_matchup():
+    event = _event(
+        sport="hockey",
+        league="nhl",
+        away_team=_team("New York Rangers", "13"),
+        home_team=_team("Boston Bruins", "1"),
+        venue=Venue(name="TD Garden", city="Boston", state="MA"),
+        away_team_record="44-22-8",
+        home_team_record="46-24-5",
+    )
+    ctx, game = _context(event)
+
+    assert build_generated_preview(event) == (
+        "The New York Rangers visit the Boston Bruins at TD Garden."
+    )
+    assert ConditionEvaluator().evaluate("has_generated_preview", None, ctx, game)
+    assert "44-22-8" not in build_generated_preview(event)

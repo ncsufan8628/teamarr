@@ -621,6 +621,26 @@ def sparse():
     return _wrap(game, home, "echl", "hockey")
 
 
+def incomplete_matchup():
+    """Unsupported event missing a team name cannot form generic prose."""
+    home = _team("", "TOL", "echl", "hockey", "1")
+    away = _team("Fort Wayne Komets", "FW", "echl", "hockey", "2")
+    ev = Event(
+        id="e2",
+        provider="espn",
+        name="Incomplete matchup",
+        short_name="FW @ TOL",
+        start_time=NOW + timedelta(days=1),
+        home_team=home,
+        away_team=away,
+        status=EventStatus(state="pre"),
+        league="echl",
+        sport="hockey",
+    )
+    game = GameContext(event=ev, is_home=True, team=home, opponent=away)
+    return _wrap(game, home, "echl", "hockey")
+
+
 def no_event():
     """No games at all (offseason): contextless-suffix and guard coverage."""
     return _wrap(GameContext(event=None), _NBA_HOME, "nba", "basketball")
@@ -643,6 +663,7 @@ CONTEXTS = {
     "racing_race_final": racing_race_final,
     "tennis": tennis,
     "sparse": sparse,
+    "incomplete_matchup": incomplete_matchup,
     "no_event": no_event,
 }
 
@@ -806,7 +827,7 @@ CONDITION_CASES: dict[str, tuple[str | None, str, str]] = {
     "is_not_final": (None, "us_pro_rich", "us_pro_final"),
     "has_recap": (None, "us_pro_rich", "sparse"),
     "has_preview": (None, "us_pro_rich", "sparse"),
-    "has_generated_preview": (None, "us_pro_rich", "sparse"),
+    "has_generated_preview": (None, "us_pro_rich", "incomplete_matchup"),
     "has_structured_preview": (None, "us_pro_rich", "sparse"),
     "has_event_note": (None, "us_pro_rich", "sparse"),
     "has_match_note": (None, "soccer", "us_pro_rich"),

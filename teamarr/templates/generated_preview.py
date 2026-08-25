@@ -60,10 +60,12 @@ _ENRICHED_FIELDS = tuple(
 
 def has_generated_preview_detail(event: Event | None) -> bool:
     """Return whether a supported event carries meaningful pregame facts."""
+    if not event:
+        return False
+    if event.sport not in SUPPORTED_SPORTS:
+        return bool(event.away_team.name and event.home_team.name)
     return bool(
-        event
-        and event.sport in SUPPORTED_SPORTS
-        and any(getattr(event, field, None) for field in _DETAIL_FIELDS)
+        any(getattr(event, field, None) for field in _DETAIL_FIELDS)
     )
 
 
@@ -272,6 +274,8 @@ def build_generated_preview(event: Event | None) -> str:
     if not has_generated_preview_detail(event):
         return ""
     assert event is not None
+    if event.sport not in SUPPORTED_SPORTS:
+        return _base_sentence(event)
     render = {
         "baseball": _baseball_sentence,
         "football": _football_sentence,
